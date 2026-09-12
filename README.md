@@ -1,109 +1,104 @@
-# FedCKA: Representation-Guided Layer Personalization for Federated 3D Perception Across Driving Domains
+# FedCKA: Representation-Guided Layer Personalization for Federated 3D Perception
 
 Anonymous code repository accompanying our paper submission.
 
 ## Overview
 
-This repository contains the code, configurations, and evaluation scripts for **FedCKA**, a personalized federated learning method for 3D object detection under heterogeneous driving domains.
-
-FedCKA uses **Centered Kernel Alignment (CKA)** to measure layer-wise representation similarity between locally trained client models and the global model. Based on these similarities, client-specific aggregation masks determine which layers remain globally shared and which are locally personalized.
-
-Our experiments evaluate federated learning across domains defined by differences in:
-
-- Location
-- Time of day
-- Weather
-
-using the **nuScenes** dataset and the **Cross-Modal Transformer (CMT)** 3D object detector.
+**FedCKA** is a personalized federated learning method for 3D object detection under heterogeneous driving domains. It uses Centered Kernel Alignment (CKA) to measure layer-wise representation similarity, creating dynamic client-specific aggregation masks that determine which layers remain globally shared and which are locally personalized.
 
 ## Repository Structure
 
 ```text
 .
-├── analysis/           # Evaluation and result-processing scripts
-├── configs/            # Experiment configurations
-├── federated/          # Federated aggregation and personalization methods
-├── tools/              # Training and evaluation utilities
-└── README.md
+├── mmdet/                              # Main project directory
+│   ├── image/                          # Apptainer definition file and container setup
+│   │   └── README.md                   # Container build and verification instructions
+│   └── mmdetection3d/                  # Core framework and project workspace
+│       ├── mmdet3d/                    # Customized mmdet3d runner
+│       ├── projects/                   # All experiments and configurations
+│       │   ├── analysis/               # Evaluation, class balance, and qualitative results
+│       │   ├── cmt_40_epoch/           # Main federated experiments and model merging tools
+│       │   ├── cmt_full/               # Full CMT baseline replication
+│       │   ├── mmdet3d_plugin/         # Custom FP16 CMT plugin for small batch sizes
+│       │   ├── subsets_creation/       # nuScenes split generation and .pkl metadata files
+│       │   └── README.md               # Projects guide, path configurations, and setups
+│       ├── tools/                      # Adjusted train and evaluation scripts
+│       └── README.md                   # Base MMDetection3D clone and checkpoint setup
+└── README.md                           # Main project overview, NDS results, and citations
+
 ```
 
-The exact directory structure may differ slightly depending on the experiment.
+## Results (NDS)
 
-## Methods
+Comparison of Federated Learning methods across nuScenes domains. Performance is reported as **nuScenes Detection Score (NDS)**.
 
-The repository contains implementations or experiment configurations for the federated methods evaluated in the paper, including:
+| Method | Domain A | Domain B | Domain C | Domain D | Domain E | Avg. |
+| --- | --- | --- | --- | --- | --- | --- |
+| *Centralized* | *0.66* | *0.68* | *0.67* | *0.64* | *0.58* | *0.66* |
+| *Own Domain Only* | *0.64* | *0.51* | *0.62* | *0.24* | *0.07* | *0.57* |
+| FedAvg [1] | 0.37 | 0.36 | 0.38 | 0.35 | 0.33 | 0.37 |
+| FedDyn [2] | 0.48 | 0.46 | 0.48 | 0.43 | 0.35 | 0.47 |
+| PCGrad [3, 4] | 0.41 | 0.41 | 0.44 | 0.39 | 0.34 | 0.42 |
+| FedRep [5] | 0.43 | 0.40 | 0.44 | 0.41 | 0.33 | 0.43 |
+| FedBN [6] | 0.41 | 0.41 | 0.43 | 0.36 | 0.33 | 0.41 |
+| FedMC [7] | 0.56 | 0.56 | 0.58 | 0.47 | 0.32 | 0.56 |
+| FedSelect [8] | 0.59 | 0.51 | 0.56 | 0.40 | 0.34 | 0.55 |
+| **FedCKA (Ours)** | **0.65** | **0.63** | **0.64** | **0.59** | **0.50** | **0.63** |
 
-* FedAvg
-* FedDyn
-* PCGrad
-* FedBN
-* FedRep
-* FedSelect
-* FedMC
-* **FedCKA (ours)**
 
-FedCKA supports two CKA-based personalization strategies:
+## Download Dependencies & Checkpoints (Hugging Face)
 
-* **Percentage-based masking:** personalizes the lowest-similarity layers until a predefined parameter ratio is reached.
-* **Threshold-based masking:** dynamically personalizes layers whose CKA similarity falls below a predefined threshold. Layers may become globally shared again in later rounds if their representations realign.
+The required `.sif` container, Flash Attention wheel, and pretrained checkpoints are hosted anonymously on Hugging Face. 
 
-## Dataset
+### 1. Container & Wheel Files
+Download the image components directly into the `/image` directory:
 
-Experiments use the **nuScenes** train/validation dataset.
+```bash
+cd /YOUR_PATH_HERE/mmdet/image
+wget -c [https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/mmdet3d_v1rc5.sif](https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/mmdet3d_v1rc5.sif)
+wget -c [https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/flash_attn-1.0.4-cp38-cp38-linux_x86_64.whl](https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/flash_attn-1.0.4-cp38-cp38-linux_x86_64.whl)
 
-The data are divided into five client domains based on combinations of location, illumination, and weather:
+```
 
-| Client | Location  | Time  | Weather |
-| ------ | --------- | ----- | ------- |
-| A      | Boston    | Day   | Clear   |
-| B      | Boston    | Day   | Rain    |
-| C      | Singapore | Day   | Clear   |
-| D      | Singapore | Night | Clear   |
-| E      | Singapore | Night | Rain    |
+### 2. Pretrained Checkpoints
 
-The nuScenes dataset itself is **not included** in this repository and must be downloaded separately from the official source.
+Create the checkpoints directory and download the required `.pth` weights into it:
 
-## Setup
+```bash
+mkdir -p /YOUR_PATH_HERE/mmdet/mmdetection3d/ckpts
+cd /YOUR_PATH_HERE/mmdet/mmdetection3d/ckpts
+wget -c [https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/nuim_r50.pth](https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/nuim_r50.pth)
+wget -c [https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/fcos3d_vovnet_imgbackbone-remapped.pth](https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/fcos3d_vovnet_imgbackbone-remapped.pth)
 
-The experiments are based on **MMDetection3D** and the **CMT** detector.
+```
 
-Please install the required dependencies before running the experiments. Environment and configuration files included in this repository provide the versions used for the paper experiments.
 
-## Running Experiments
+## Anonymity & Citation
 
-Training follows a federated procedure in which each client trains locally before client models are processed by the selected federated aggregation method.
+This repository is anonymized for peer review. Author identities and institutional information have been removed. 
 
-Experiment configurations and scripts for reproducing the reported results are provided in the corresponding directories.
+```bibtex
+@inproceedings{anonymous2026fedcka,
+  title={FedCKA: Representation-Guided Layer Personalization for Federated 3D Perception Across Driving Domains},
+  author={Anonymous},
+  booktitle={Under Review},
+  year={2026}
+}
 
-The main FedCKA experiments use:
+```
 
-* 5 federated clients
-* 40 communication rounds
-* 1 local epoch per round
-* CKA-based masking at each communication round
-* 10 local samples for estimating layer-wise representation similarity
+### References
 
-## Evaluation
-
-The main evaluation metrics are:
-
-* **mAP** — mean Average Precision
-* **NDS** — nuScenes Detection Score
-* **CAP** — Car Average Precision
-
-Additional scripts are provided for cross-domain evaluation, aggregation of repeated runs, and analysis of personalization masks.
-
-## Anonymity
-
-This repository has been anonymized for peer review. Author identities, institutional information, and other identifying metadata have been removed.
-
-## Citation
-
-Citation information will be added following the review process.
+* [1] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y. Arcas, "Communication efficient learning of deep networks from decentralized data," in *Proc. AISTATS*, 2017, pp. 1273–1282.
+* [2] D. A. E. Acar, Y. Zhao, R. Matas Navarro, M. Mattina, P. N. Whatmough, and V. Saligrama, "Federated learning based on dynamic regularization," in *Proc. ICLR*, 2021.
+* [3] T. Yu, S. Kumar, A. Gupta, S. Levine, K. Hausman, and C. Finn, "Gradient surgery for multi-task learning," in *Proc. NeurIPS*, 2020, pp. 5824–5836; and X. Zhang, W. Sun, and Y. Chen, "Tackling the non-IID issue in heterogeneous federated learning by gradient harmonization," *IEEE Signal Processing Letters*, vol. 31, pp. 2595–2599, 2024.
+* [4] L. Collins, H. Hassani, A. Mokhtari, and S. Shakkottai, "Exploiting shared representations for personalized federated learning," in *Proc. ICML*, 2021, pp. 2089–2099.
+* [5] X. Li, M. Jiang, X. Zhang, M. Kamp, and Q. Dou, "FedBN: Federated learning on non-IID features via local batch normalization," in *Proc. ICLR*, 2021.
+* [6] Y. Gao, X. He, and Y. Chen, "Personalized federated learning algorithm based on information content model customization," in *Proc. CAMMIC*, 2025, pp. 834–838.
+* [7] R. Tamirisa, C. Xie, W. Bao, A. Zhou, R. Arel, and A. Shamsian, "FedSelect: Personalized federated learning with customized selection of parameters for fine-tuning," in *Proc. CVPR*, 2024, pp. 29485–29494.
+* [8] MMDetection3D Contributors, "MMDetection3D: OpenMMLab next-generation platform for general 3D object detection," 2020. [Online]. Available: https://github.com/open-mmlab/mmdetection3d
+* [9] J. Yan et al., "Cross modal transformer: Towards fast and robust 3D object detection," in *Proc. ICCV*, 2023, pp. 18268–18278.
 
 ## License
 
-The repository builds upon existing open-source projects, including MMDetection3D and CMT. Please refer to their respective licenses for code originating from those projects.
-
-```
-```
+This repository builds upon MMDetection3D [8] and CMT [9]. Please refer to their respective open-source licenses for inherited code.
