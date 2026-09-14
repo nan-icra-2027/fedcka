@@ -144,7 +144,7 @@ run_training () {
         cd /workspace/mmdet/mmdetection3d && \
         export PYTHONPATH=/workspace/mmdet/mmdetection3d:/workspace/mmdet:\$PYTHONPATH && \
         python -u tools/train.py \
-        projects/cmt/fed/fedSelect/improved_lightweight_cmt_iterated_FedSelect.py \
+        projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn_paramselect.py \
           --launcher slurm \
           --work-dir $WORK_DIR \
           $RESUME_ARG \
@@ -185,7 +185,7 @@ run_merge () {
             --outputs $OUT_A $OUT_B $OUT_C $OUT_D $OUT_E \
             --weight-a $SIZE_A --weight-b $SIZE_B --weight-c $SIZE_C --weight-d $SIZE_D --weight-e $SIZE_E \
             --method $METHOD \
-            --config projects/cmt/fed/fedSelect/improved_lightweight_cmt_iterated_FedSelect.py \
+            --config projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn_paramselect.py \
             --select-ratio 0.02 \
             --max-sparsity 0.4
       "

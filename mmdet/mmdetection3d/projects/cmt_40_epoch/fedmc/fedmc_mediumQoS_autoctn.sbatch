@@ -147,7 +147,7 @@ run_training () {
         cd /workspace/mmdet/mmdetection3d && \
         export PYTHONPATH=/workspace/mmdet/mmdetection3d:/workspace/mmdet:\$PYTHONPATH && \
         python -u tools/train.py \
-        projects/cmt/fed/fedmc/improved_lightweight_cmt_iterated.py \
+        projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn_fisher.py \
           --launcher slurm \
           --work-dir $WORK_DIR \
           $RESUME_ARG \

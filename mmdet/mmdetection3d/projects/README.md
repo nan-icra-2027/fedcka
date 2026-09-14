@@ -18,6 +18,9 @@ Guide to directory structure, configuration setups, and experimental replication
 * **`/cmt_full`**  
   * Complete reproduction of the original CMT baseline configuration and benchmarks.
 
+* **`/configs`**  
+  * Contains all configuration files used for the experiments.
+
 * **`/analysis`**  
   * `/class_balance`: Reproduce the nuScenes class distribution overview.  
   * `/qualitative_results`: Generate qualitative prediction visualizations reported in the paper.

@@ -20,7 +20,7 @@ def parse_args():
                              'fedselect_cka', 'fedselect_cka_elastic', 'pcgrad', 'fedmc'],
                     help='Aggregation method. Default is fedavg.')
     parser.add_argument('--config', type=str, default=None, 
-                        help='Path to the MMDet3D config file (e.g., improved_lightweight_cmt_iterated.py). Required for FedBN.')
+                        help='Path to the MMDet3D config file (e.g., cmt_voxel01_vov_1600x640_cbgs_syncbn.py). Required for FedBN.')
     parser.add_argument(
         '--select-ratio',
         type=float,

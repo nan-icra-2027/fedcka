@@ -38,7 +38,7 @@ export PATH=/opt/conda/envs/mmdet3d_v100rc5/bin:/opt/conda/bin:$PATH
 export PYTHONPATH=/workspace/mmdet/mmdetection3d:$PYTHONPATH
 export PYTHONPATH=/workspace/mmdet/mmdetection3d:/workspace/mmdet:\$PYTHONPATH
 cd /workspace/mmdet/mmdetection3d/
-python projects/analysis/scripts_cmt/main.py --config /YOUR_HOMEDIR_PATH_HERE/mmdet/mmdetection3d/projects/cmt/fed/all_domains/improved_lightweight_cmt_iterated.py --data_dir /YOUR_HOMEDIR_PATH_HERE/mmdet/datasets/v1.0-mini --pt /YOUR_HOMEDIR_PATH_HERE/Desktop/cmt_nocomm_modelA.pth /YOUR_HOMEDIR_PATH_HERE/Desktop/cmt_nocomm_modelB.pth --modality lidar_camera
+python projects/analysis/scripts_cmt/main.py --config /YOUR_HOMEDIR_PATH_HERE/mmdet/mmdetection3d/projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn.py --data_dir /YOUR_HOMEDIR_PATH_HERE/mmdet/datasets/v1.0-mini --pt /YOUR_HOMEDIR_PATH_HERE/Desktop/cmt_nocomm_modelA.pth /YOUR_HOMEDIR_PATH_HERE/Desktop/cmt_nocomm_modelB.pth --modality lidar_camera
 """
 
 def collect_multimodal_samples(data_dir: str, max_samples: int) -> List[Tuple[str, str]]:
