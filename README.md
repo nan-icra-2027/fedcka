@@ -87,6 +87,10 @@ This repository is anonymized for peer review. Author identities and institution
 
 ```
 
+## AI Usage Disclosure
+
+During the development of this codebase, the authors utilized ChatGPT, Google Gemini, and GitHub Copilot in Agent Mode as programming assistants. The system was used strictly as an assistive tool for debugging, expanding existing functions, and generating boilerplate code. All AI-generated code was thoroughly reviewed, tested, and modified by the authors to ensure correctness and compatibility within the MMDetection3D environment. The authors assume full responsibility for the functionality, logic, and integrity of the code in this repository.
+
 ### References
 
 * [1] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y. Arcas, "Communication efficient learning of deep networks from decentralized data," in *Proc. AISTATS*, 2017, pp. 1273–1282.
