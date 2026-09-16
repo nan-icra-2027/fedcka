@@ -33,7 +33,11 @@ def parse_args():
         help='FedSelect-only: max personalized parameter fraction (default: 0.4).')
 
     # --- FedCKA arguments ---
-    parser.add_argument('--data-dir', type=str, default=None, help='FedSelect CKA: Path to dataset directory.')
+    parser.add_argument('--data-dir-A', type=str, default=None, help='FedSelect CKA: Path to dataset-A directory.')
+    parser.add_argument('--data-dir-B', type=str, default=None, help='FedSelect CKA: Path to dataset-B directory.')
+    parser.add_argument('--data-dir-C', type=str, default=None, help='FedSelect CKA: Path to dataset-C directory.')
+    parser.add_argument('--data-dir-D', type=str, default=None, help='FedSelect CKA: Path to dataset-D directory.')
+    parser.add_argument('--data-dir-E', type=str, default=None, help='FedSelect CKA: Path to dataset-E directory.')
     parser.add_argument('--modality', type=str, default='lidar_camera', choices=['lidar', 'camera', 'lidar_camera'], help='FedSelect CKA: Modality for CKA comparison.')
     parser.add_argument('--runner-path', type=str, default='/YOUR_HOMEDIR_PATH_HERE/mmdet/mmdetection3d/projects/cmt_40_epoch/fedselect/scripts_cmt_copy/runner.py', help='FedSelect CKA: Path to runner.py script.')
     parser.add_argument('--cka-samples', type=int, default=10, help='FedSelect CKA: Max samples to process for CKA.')
@@ -1375,7 +1379,7 @@ def fedselect_fullelastic(models, output_paths, norm_weights, client_ids, prev_g
         print(f"Saved personalized FedSelect model to {out_path}")
 
 
-def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_path, mask_dir, select_ratio, max_sparsity, runner_path, config, data_dir, modality, cka_samples, dynamic_sparsity):
+def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_path, mask_dir, select_ratio, max_sparsity, runner_path, config, data_dirs, modality, cka_samples, dynamic_sparsity):
     """
     FedSelect CKA implementation.
     Computes CKA between the previous global model and each client model.
@@ -1443,7 +1447,7 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
     print("\nPhase 1: Discovering personalized client layers via CKA...")
     start_time_cka = time.time()
     print('Starting CKA time: ', time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time_cka)))
-    for m_path, cid in zip(models, client_ids):
+    for m_path, cid, data_dir in zip(models, client_ids, data_dirs):
         print(f"\n==================== CLIENT {cid} ====================")
         print(f"Client checkpoint path: {m_path}")
 
@@ -1710,7 +1714,7 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
     else:
         print(f"Current round is {actual_current_round}. Threshold is {threshold_round}. No cleanup needed yet.")
     
-def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_global_path, mask_dir, select_ratio, max_sparsity, runner_path, config, data_dir, modality, cka_samples, dynamic_sparsity):
+def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_global_path, mask_dir, select_ratio, max_sparsity, runner_path, config, data_dirs, modality, cka_samples, dynamic_sparsity):
     """
     FedSelect CKA implementation.
     Computes CKA between the previous global model and each client model.
@@ -1774,7 +1778,7 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
 
     # 2. Phase 1: Client Subnetwork Discovery via CKA
     print("\nPhase 1: Discovering personalized client layers via CKA...")
-    for m_path, cid in zip(models, client_ids):
+    for m_path, cid, data_dir in zip(models, client_ids, data_dirs):
         print(f"\n==================== CLIENT {cid} ====================")
         print(f"Client checkpoint path: {m_path}")
 
@@ -2851,6 +2855,13 @@ def main():
         
     model_paths = args.inputs
     output_paths = args.outputs
+    cka_data_dirs = [
+        args.data_dir_A,
+        args.data_dir_B,
+        args.data_dir_C,
+        args.data_dir_D,
+        args.data_dir_E,
+    ]
     
     # Extract and normalize weights
     raw_weights = []
@@ -2960,6 +2971,10 @@ def main():
         )
     elif args.method == 'fedselect_cka':
         client_ids = [f"Model{string.ascii_uppercase[i]}" for i in range(len(model_paths))]
+        if len(model_paths) > len(cka_data_dirs) or any(
+            data_dir is None for data_dir in cka_data_dirs[:len(model_paths)]
+        ):
+            raise ValueError("FedSelect CKA requires one dataset directory per client (A-E).")
         fedselect_cka(
             models=model_paths, 
             output_paths=output_paths, 
@@ -2971,7 +2986,7 @@ def main():
             max_sparsity=args.max_sparsity,      # <-- Uses standard argument
             runner_path=args.runner_path,
             config=args.config,
-            data_dir=args.data_dir,
+            data_dirs=cka_data_dirs[:len(model_paths)],
             modality=args.modality,
             cka_samples=args.cka_samples,
             dynamic_sparsity=args.dynamic_sparsity
@@ -3000,6 +3015,10 @@ def main():
         )
     elif args.method == 'fedselect_cka_elastic':
         client_ids = [f"Model{string.ascii_uppercase[i]}" for i in range(len(model_paths))]
+        if len(model_paths) > len(cka_data_dirs) or any(
+            data_dir is None for data_dir in cka_data_dirs[:len(model_paths)]
+        ):
+            raise ValueError("FedSelect CKA elastic requires one dataset directory per client (A-E).")
         fedselect_cka_elastic(
             models=model_paths, 
             output_paths=output_paths, 
@@ -3011,7 +3030,7 @@ def main():
             max_sparsity=args.max_sparsity,      # <-- Uses standard argument
             runner_path=args.runner_path,
             config=args.config,
-            data_dir=args.data_dir,
+            data_dirs=cka_data_dirs[:len(model_paths)],
             modality=args.modality,
             cka_samples=args.cka_samples,
             dynamic_sparsity=args.dynamic_sparsity

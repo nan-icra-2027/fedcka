@@ -43,6 +43,7 @@ import glob
 import json
 import math
 import os
+import random
 import sys
 import time
 from typing import Any, List, Sequence, Tuple
@@ -112,6 +113,8 @@ def _collect_multimodal_samples(data_dir: str, max_samples: int) -> List[Tuple[s
 
         if best_camera_file is not None:
             paired_samples.append((lidar_file, best_camera_file))
+
+    random.shuffle(paired_samples)
 
     if max_samples > 0:
         paired_samples = paired_samples[:max_samples]

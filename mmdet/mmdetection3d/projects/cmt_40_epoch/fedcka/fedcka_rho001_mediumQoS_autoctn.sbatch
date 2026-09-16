@@ -186,7 +186,11 @@ run_merge () {
     if [ "$METHOD" = "fedselect_cka" ]; then
         MERGE_CMD="$MERGE_CMD \
             --runner-path projects/cmt_40_epoch/fedcka/scripts_cmt_copy/runner.py \
-            --data-dir /YOUR_NUSCENES_PATH_HERE/nuscenes \
+            --data-dir-A $DATASET_A \
+            --data-dir-B $DATASET_B \
+            --data-dir-C $DATASET_C \
+            --data-dir-D $DATASET_D \
+            --data-dir-E $DATASET_E \
             --modality lidar_camera"
     fi
 
