@@ -90,9 +90,9 @@ class CKAMetric(ActivationMetric):
             
             if denom > 0:
                 cka_score = hsic_xy / denom
-                val = torch.clamp(cka_score, 0.0, 1.0).item()
-                print(f"Sparse CKA Score: {1.0 - val:.4f} (Dist) | {val:.4f} (Sim)") if verbose else None
-                return float(val)
+                # val = torch.clamp(cka_score, 0.0, 1.0).item()
+                # print(f"Sparse CKA Score: {1.0 - val:.4f} (Dist) | {val:.4f} (Sim)") if verbose else None
+                return float(cka_score)
             return float('nan')
 
         # ==========================================
@@ -123,8 +123,8 @@ class CKAMetric(ActivationMetric):
         denom = torch.sqrt(hsic_xx * hsic_yy)
         if denom > 0:
             cka_score = hsic_xy / denom
-            val = torch.clamp(cka_score, 0.0, 1.0).item()
-            return float(val)
+            # val = torch.clamp(cka_score, 0.0, 1.0).item()
+            return float(cka_score)
         return float('nan')
         
     def get_name(self) -> str:
