@@ -1379,7 +1379,7 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
     """
     FedSelect CKA implementation.
     Computes CKA between the previous global model and each client model.
-    Selects entire layers with the highest CKA scores until the parameter count 
+    Selects entire layers with the lowest CKA similarity scores until the parameter count 
     reaches `select_ratio`, keeping them fully personalized. Caps at `max_sparsity`.
     """
     print(f"Running FedSelect CKA Aggregation (select_ratio={select_ratio}, max_sparsity={max_sparsity})...")
@@ -1392,8 +1392,11 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
     print(f"  mask_dir={mask_dir}")
     print(f"  global_dir={os.path.dirname(prev_global_path)}")
 
-    if not config or not data_dir:
-        raise ValueError("FedSelect CKA requires --config and --data-dir to be provided.")
+    if not config:
+        raise ValueError("FedCKA requires --config.")
+
+    if len(data_dirs) != len(models) or any(not path for path in data_dirs):
+        raise ValueError("FedCKA requires one valid data directory per client.")
 
     if not os.path.exists(prev_global_path):
         print(f"No previous global model found at {prev_global_path}. Exiting. Run one round of standard FedAvg first to initialize the global model.")
@@ -1481,24 +1484,24 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
                     output_dir=os.path.join(mask_dir, "cka_temp")
                 )
 
-                # Filter out NaNs and sort by CKA score DESCENDING (Highest CKA first)
+                # Filter out NaNs and sort by CKA similarity ASCENDING (Lowest similarity first)
                 valid_cka = [(idx, name, score) for idx, name, score in cka_rows if not math.isnan(score)]
                 print(f"{cid}: CKA returned {len(cka_rows)} rows.")
                 print(f"{cid}: valid CKA rows={len(valid_cka)}, NaN rows filtered out={len(cka_rows) - len(valid_cka)}")
 
-                valid_cka.sort(key=lambda x: x[2], reverse=True)
-                print(f"{cid}: Top 10 layers by CKA:")
+                valid_cka.sort(key=lambda x: x[2])
+                print(f"{cid}: 10 lowest-similarity layers by CKA:")
                 for idx, name, score in valid_cka[:10]:
                     print(f"  idx={idx} | layer={name} | cka={score:.6f}")
                 
-                print(f"{cid}: Lowest 10 layers by CKA:")
+                print(f"{cid}: 10 highest-similarity layers by CKA:")
                 for idx, name, score in valid_cka[-10:]:
                     print(f"  idx={idx} | layer={name} | cka={score:.6f}")
                     
                 new_personalized = 0
                 layers_masked = 0
             
-                # Iterate through layers with highest CKA scores
+                # Iterate through layers with lowest CKA similarity scores
                 for idx, layer_name, score in valid_cka:
                     # Find all parameter keys belonging to this layer
                     layer_keys = [k for k in valid_keys if k.replace('module.', '').startswith(layer_name + '.') or k.replace('module.', '') == layer_name]
@@ -1538,28 +1541,28 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
                 output_dir=os.path.join(mask_dir, "cka_temp")
             )
 
-            # Filter out NaNs and sort by CKA score DESCENDING (Highest CKA first)
+            # Filter out NaNs and sort by CKA similarity ASCENDING (Lowest similarity first)
             valid_cka = [(idx, name, score) for idx, name, score in cka_rows if not math.isnan(score)]
             print(f"{cid}: CKA returned {len(cka_rows)} rows.")
             print(f"{cid}: valid CKA rows={len(valid_cka)}, NaN rows filtered out={len(cka_rows) - len(valid_cka)}")
 
-            valid_cka.sort(key=lambda x: x[2], reverse=True)
-            print(f"{cid}: Top 10 layers by CKA:")
+            valid_cka.sort(key=lambda x: x[2])
+            print(f"{cid}: 10 lowest-similarity layers by CKA:")
             for idx, name, score in valid_cka[:10]:
                 print(f"  idx={idx} | layer={name} | cka={score:.6f}")
             
-            print(f"{cid}: Lowest 10 layers by CKA:")
+            print(f"{cid}: 10 highest-similarity layers by CKA:")
             for idx, name, score in valid_cka[-10:]:
                 print(f"  idx={idx} | layer={name} | cka={score:.6f}")
 
             new_personalized = 0
             layers_masked = 0
         
-            # Iterate through layers with highest CKA scores
+            # Iterate through layers with lowest CKA similarity scores
             for idx, layer_name, score in valid_cka:
                 
                 # Check against the dynamic threshold
-                if score > dynamic_sparsity:
+                if score < dynamic_sparsity:
                     # Find all parameter keys belonging to this layer
                     layer_keys = [k for k in valid_keys if k.replace('module.', '').startswith(layer_name + '.') or k.replace('module.', '') == layer_name]
                     
@@ -1567,7 +1570,7 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
                     layer_new_params = sum((~client_mask[k]).sum().item() for k in layer_keys)
                     
                     if layer_new_params > 0:
-                        print(f"{cid}: SELECTING layer {layer_name} with CKA={score:.6f} > {dynamic_sparsity}, adding {layer_new_params:,} new params")
+                        print(f"{cid}: SELECTING layer {layer_name} with CKA similarity={score:.6f} < {dynamic_sparsity}, adding {layer_new_params:,} new params")
 
                         # Apply mask to the entire layer
                         for k in layer_keys:
@@ -1577,8 +1580,8 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
                         new_personalized += layer_new_params
                         layers_masked += 1
                 else:
-                    # Since valid_cka is sorted descending, if we hit a score <= threshold, all subsequent layers will be too.
-                    print(f"{cid}: CKA score {score:.6f} is below threshold {dynamic_sparsity}. Stopping selection.")
+                    # Since valid_cka is sorted ascending, all subsequent layers have higher similarity.
+                    print(f"{cid}: CKA similarity {score:.6f} reached threshold {dynamic_sparsity}. Stopping selection.")
                     break
                         
             print(f"  {cid}: Masked {layers_masked} entire layers based on threshold.")
@@ -1716,7 +1719,7 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
     """
     FedSelect CKA implementation.
     Computes CKA between the previous global model and each client model.
-    Selects entire layers with the highest CKA scores until the parameter count 
+    Selects entire layers with the lowest CKA similarity scores until the parameter count 
     reaches `select_ratio`, keeping them fully personalized. Caps at `max_sparsity`.
     """
     print(f"Running FedSelect CKA Aggregation (select_ratio={select_ratio}, max_sparsity={max_sparsity})...")
@@ -1727,8 +1730,11 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
     print(f"  mask_dir={mask_dir}")
     print(f"  global_dir={os.path.dirname(prev_global_path)}")
 
-    if not config or not data_dir:
-        raise ValueError("FedSelect CKA requires --config and --data-dir to be provided.")
+    if not config:
+        raise ValueError("FedCKA requires --config.")
+
+    if len(data_dirs) != len(models) or any(not path for path in data_dirs):
+        raise ValueError("FedCKA requires one valid data directory per client.")
 
     if not os.path.exists(prev_global_path):
         print(f"No previous global model found at {prev_global_path}. Exiting. Run one round of standard FedAvg first to initialize the global model.")
@@ -1819,17 +1825,17 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
                     output_dir=os.path.join(mask_dir, "cka_temp")
                 )
 
-                # Filter out NaNs and sort by CKA score DESCENDING (Highest CKA first)
+                # Filter out NaNs and sort by CKA similarity ASCENDING (Lowest similarity first)
                 valid_cka = [(idx, name, score) for idx, name, score in cka_rows if not math.isnan(score)]
                 print(f"{cid}: CKA returned {len(cka_rows)} rows.")
                 print(f"{cid}: valid CKA rows={len(valid_cka)}, NaN rows filtered out={len(cka_rows) - len(valid_cka)}")
 
-                valid_cka.sort(key=lambda x: x[2], reverse=True)
-                print(f"{cid}: Top 10 layers by CKA:")
+                valid_cka.sort(key=lambda x: x[2])
+                print(f"{cid}: 10 lowest-similarity layers by CKA:")
                 for idx, name, score in valid_cka[:10]:
                     print(f"  idx={idx} | layer={name} | cka={score:.6f}")
                 
-                print(f"{cid}: Lowest 10 layers by CKA:")
+                print(f"{cid}: 10 highest-similarity layers by CKA:")
                 for idx, name, score in valid_cka[-10:]:
                     print(f"  idx={idx} | layer={name} | cka={score:.6f}")
                     
@@ -1884,7 +1890,7 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
                 new_personalized = 0
                 layers_masked = 0
             
-                # Iterate through layers with highest CKA scores
+                # Iterate through layers with lowest CKA similarity scores
                 for idx, layer_name, score in valid_cka:
                     # Find all parameter keys belonging to this layer
                     layer_keys = [k for k in valid_keys if k.replace('module.', '').startswith(layer_name + '.') or k.replace('module.', '') == layer_name]
@@ -1927,36 +1933,35 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
                 output_dir=os.path.join(mask_dir, "cka_temp")
             )
 
-            # Filter out NaNs and sort by CKA score DESCENDING (Highest CKA first)
+            # Filter out NaNs and sort by CKA similarity ASCENDING (Lowest similarity first)
             valid_cka = [(idx, name, score) for idx, name, score in cka_rows if not math.isnan(score)]
             print(f"{cid}: CKA returned {len(cka_rows)} rows.")
             print(f"{cid}: valid CKA rows={len(valid_cka)}, NaN rows filtered out={len(cka_rows) - len(valid_cka)}")
 
-            valid_cka.sort(key=lambda x: x[2], reverse=True)
-            print(f"{cid}: Top 10 layers by CKA:")
+            valid_cka.sort(key=lambda x: x[2])
+            print(f"{cid}: 10 lowest-similarity layers by CKA:")
             for idx, name, score in valid_cka[:10]:
                 print(f"  idx={idx} | layer={name} | cka={score:.6f}")
             
-            print(f"{cid}: Lowest 10 layers by CKA:")
+            print(f"{cid}: 10 highest-similarity layers by CKA:")
             for idx, name, score in valid_cka[-10:]:
                 print(f"  idx={idx} | layer={name} | cka={score:.6f}")
 
-            for _, layer_name, score in valid_cka:
-                if score <= dynamic_sparsity:
-                    layer_keys = [k for k in valid_keys if k.replace('module.', '').startswith(layer_name + '.') or k.replace('module.', '') == layer_name]
-                    for k in layer_keys:
-                        client_mask[k] = torch.zeros_like(client_mask[k], dtype=torch.bool)
+            for _, layer_name, _ in valid_cka:
+                layer_keys = [k for k in valid_keys if k.replace('module.', '').startswith(layer_name + '.') or k.replace('module.', '') == layer_name]
+                for k in layer_keys:
+                    client_mask[k] = torch.zeros_like(client_mask[k], dtype=torch.bool)
 
             current_personalized = sum(client_mask[k].sum().item() for k in valid_keys)
 
             new_personalized = 0
             layers_masked = 0
         
-            # Iterate through layers with highest CKA scores
+            # Iterate through layers with lowest CKA similarity scores
             for idx, layer_name, score in valid_cka:
                 
                 # Check against the dynamic threshold
-                if score > dynamic_sparsity:
+                if score < dynamic_sparsity:
                     # Find all parameter keys belonging to this layer
                     layer_keys = [k for k in valid_keys if k.replace('module.', '').startswith(layer_name + '.') or k.replace('module.', '') == layer_name]
                     
@@ -1964,7 +1969,7 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
                     layer_new_params = sum((~client_mask[k]).sum().item() for k in layer_keys)
                     
                     if layer_new_params > 0:
-                        print(f"{cid}: SELECTING layer {layer_name} with CKA={score:.6f} > {dynamic_sparsity}, adding {layer_new_params:,} new params")
+                        print(f"{cid}: SELECTING layer {layer_name} with CKA similarity={score:.6f} < {dynamic_sparsity}, adding {layer_new_params:,} new params")
 
                         # Apply mask to the entire layer
                         for k in layer_keys:
@@ -1974,8 +1979,8 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
                         new_personalized += layer_new_params
                         layers_masked += 1
                 else:
-                    # Since valid_cka is sorted descending, if we hit a score <= threshold, all subsequent layers will be too.
-                    print(f"{cid}: CKA score {score:.6f} is below threshold {dynamic_sparsity}. Stopping selection.")
+                    # Since valid_cka is sorted ascending, all subsequent layers have higher similarity.
+                    print(f"{cid}: CKA similarity {score:.6f} reached threshold {dynamic_sparsity}. Stopping selection.")
                     break
                         
             print(f"  {cid}: Masked {layers_masked} entire layers based on threshold.")

@@ -11,7 +11,7 @@ export EPOCHS_PER_ROUND=1
 export SAMPLES_PER_GPU=16
 
 # dataset sizes for each client (A, B, C, D, E)
-# since each has 39 or 40 samples for each scene, the scene sizes are approximately the same as the dataset sizes
+# since each has 39, 40, 41 samples for each scene, the scene sizes are approximately the same as the dataset sizes
 export SIZE_A=265
 export SIZE_B=125
 export SIZE_C=226

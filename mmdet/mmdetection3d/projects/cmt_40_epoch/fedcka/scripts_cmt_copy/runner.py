@@ -114,6 +114,57 @@ def _collect_multimodal_samples(data_dir: str, max_samples: int) -> List[Tuple[s
         if best_camera_file is not None:
             paired_samples.append((lidar_file, best_camera_file))
 
+    def keep_train_samples(samples: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+        """Filter pairs using the official NuScenes train scene split.
+
+        This helper is deliberately fail-open: datasets without usable NuScenes
+        metadata retain the previous sampling behavior.
+        """
+        try:
+            from nuscenes.nuscenes import NuScenes
+            from nuscenes.utils import splits
+
+            version = None
+            for candidate in ("v1.0-trainval", "v1.0-mini"):
+                if os.path.isfile(os.path.join(data_dir, candidate, "sample_data.json")):
+                    version = candidate
+                    break
+                if os.path.isfile(os.path.join(data_dir, candidate, "scene.json")):
+                    version = candidate
+                    break
+
+            if version is None:
+                return samples
+
+            nusc = NuScenes(version=version, dataroot=data_dir, verbose=False)
+            train_scene_names = set(
+                splits.mini_train if version == "v1.0-mini" else splits.train
+            )
+            sample_data_by_filename = {
+                os.path.basename(record["filename"]): record
+                for record in nusc.sample_data
+            }
+
+            train_samples = []
+            for lidar_file, camera_file in samples:
+                lidar_record = sample_data_by_filename[os.path.basename(lidar_file)]
+                sample_record = nusc.get("sample", lidar_record["sample_token"])
+                scene_record = nusc.get("scene", sample_record["scene_token"])
+                if scene_record["name"] in train_scene_names:
+                    train_samples.append((lidar_file, camera_file))
+
+            return train_samples
+        except Exception as exc:
+            print(
+                f"Warning: Could not apply NuScenes train split filter ({exc}). "
+                "Using all paired samples."
+            )
+            return samples
+
+    # Filter before shuffling and applying max_samples so validation samples do
+    # not consume the requested training sample budget.
+    paired_samples = keep_train_samples(paired_samples)
+
     random.shuffle(paired_samples)
 
     if max_samples > 0:

@@ -106,7 +106,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                  show=False, 
                  out_dir=None, 
                  pipeline=None, 
-                 min_gt_count=5, 
+                 min_gt_count=1, 
                  **kwargs): 
         """Evaluate and inject filtered mAP and NDS."""
         

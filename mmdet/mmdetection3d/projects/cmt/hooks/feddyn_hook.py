@@ -4,9 +4,9 @@ from mmcv.runner import HOOKS, Hook
 
 @HOOKS.register_module()
 class FedDynHook(Hook):
-    def __init__(self, client_id, start_epoch=5, alpha=0.01, work_dir='./feddyn_states'):
+    def __init__(self, client_id, start_epoch=10, alpha=0.01, work_dir='./feddyn_states'):
         self.client_id = client_id
-        self.alpha = alpha
+        self.alpha = alpha # this influences how hard the local models are pulled towards the global model.
         self.work_dir = work_dir
         self.start_epoch = start_epoch 
         self.global_weights = {}
@@ -44,24 +44,15 @@ class FedDynHook(Hook):
                 self.handles.append(handle)
 
     def _get_hook(self, param_name, local_param):
-        # 1. Define the task head prefixes to keep strictly local (FedPer)
-        local_prefixes = (
-            'pts_bbox_head.common_heads',
-            'pts_bbox_head.separate_head',
-            'pts_bbox_head.tasks'
-        )
-        
-        # 2. Check if this parameter belongs to an excluded layer
-        is_local_head = any(param_name.startswith(prefix) for prefix in local_prefixes)
-        
         # Basic string matching for BatchNorm (adjust if your model uses different BN names)
         is_bn = '.bn' in param_name or '.norm' in param_name or 'bn.' in param_name
 
         def hook_fn(grad):
             if grad is None: return grad
 
-            # If it's a BN layer or a personalized head, skip the FedDyn penalty entirely
-            if is_local_head or is_bn:
+            # If it's a BN layer, skip the FedDyn penalty.
+            # These layers are relatively small and update fiercely so feddyn de-stabilizes them. We let them update freely.
+            if is_bn:
                 return grad
             
             # Move frozen global weights and h_state to the current GPU layer-by-layer to save VRAM
@@ -72,9 +63,9 @@ class FedDynHook(Hook):
             layer_alpha = self.alpha
 
             if 'img_backbone' in param_name:
-                layer_alpha = self.alpha * 0.01
+                layer_alpha = self.alpha * 0.01     # very deep network, so we scale down the alpha to avoid over-regularization
             elif 'img_neck' in param_name:
-                layer_alpha = self.alpha * 0.1
+                layer_alpha = self.alpha * 0.1 
             
             # Apply FedDyn math: grad = grad - h + alpha * (local_w - global_w)
             feddyn_penalty = -h_state + layer_alpha * (local_param.detach() - global_w)
