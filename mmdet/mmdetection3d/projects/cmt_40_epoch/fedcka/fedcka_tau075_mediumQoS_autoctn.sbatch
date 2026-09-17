@@ -146,15 +146,15 @@ run_training () {
         export PYTHONPATH=/workspace/mmdet/mmdetection3d:/workspace/mmdet:\$PYTHONPATH && \
         python -m torch.distributed.launch --nproc_per_node=2 --master_port=$CURRENT_MASTER_PORT \
         tools/train.py \
-        projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn_paramselect.py \
+        projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn.py \
           --launcher pytorch \
           --work-dir $WORK_DIR \
+          --seed 0 \
           $RESUME_ARG \
           --cfg-options ${CFG_LOAD_ARG} \
             data.samples_per_gpu=$SAMPLES_PER_GPU \
             total_epochs=$GLOBAL_EPOCHS \
-            custom_hooks.1.stop_epoch=$STOP_EPOCH \
-            custom_hooks.2.mask_path=\"/workspace/work_dirs/fedselect_masks/${MODEL_NAME}_mask.pth\"
+            custom_hooks.1.stop_epoch=$STOP_EPOCH
       '
     "
 }

@@ -147,6 +147,7 @@ run_training () {
         projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn_paramselect.py \
           --launcher slurm \
           --work-dir $WORK_DIR \
+          --seed 0 \
           $RESUME_ARG \
           --cfg-options ${CFG_LOAD_ARG} dist_params.port=$CURRENT_MASTER_PORT \
             data.samples_per_gpu=$SAMPLES_PER_GPU \

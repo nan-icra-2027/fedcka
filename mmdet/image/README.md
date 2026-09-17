@@ -14,7 +14,7 @@ Download the following required files from the provided Hugging Face and place t
 Navigate to the image directory and build the `.sif` container using the provided definition file:
 
 ```bash
-cd /YOUR_PATH_HERE/fedcka/image
+cd /YOUR_PATH_HERE/fedcka/mmdet/image
 apptainer build mmdet3d_v1rc5.sif mmdet3d_v1rc5.def
 
 ```
@@ -25,7 +25,7 @@ Run the verification script inside the container to ensure the environment and d
 
 ```bash
 apptainer exec --nv --cleanenv \
-  --bind /YOUR_PATH_HERE/fedcka:/workspace/mmdet \
+  --bind /YOUR_PATH_HERE/fedcka/mmdet:/workspace/mmdet \
   mmdet3d_v1rc5.sif /usr/local/bin/verify_mmdet3d.sh
 
 ```

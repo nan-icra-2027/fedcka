@@ -26,11 +26,9 @@ DATASET_C="$DAY_CLEAR_DATAROOT_SING"
 DATASET_D="$NIGHT_CLEAR_DATAROOT"
 DATASET_E="$NIGHT_RAIN_DATAROOT"
 
-
 # ==========================================
 # --- AUTO-DETECT RESUME STATE ---
 # ==========================================
-LATEST_ROUND=0
 for (( i=1; i<=NUM_ROUNDS; i++ )); do
     if [ -d "$WORK/round_$i" ]; then
         LATEST_ROUND=$i
@@ -144,15 +142,15 @@ run_training () {
         cd /workspace/mmdet/mmdetection3d && \
         export PYTHONPATH=/workspace/mmdet/mmdetection3d:/workspace/mmdet:\$PYTHONPATH && \
         python -u tools/train.py \
-        projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn_paramselect.py \
+        projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn.py \
           --launcher slurm \
           --work-dir $WORK_DIR \
+          --seed 0 \
           $RESUME_ARG \
           --cfg-options ${CFG_LOAD_ARG} dist_params.port=$CURRENT_MASTER_PORT \
             data.samples_per_gpu=$SAMPLES_PER_GPU \
             total_epochs=$GLOBAL_EPOCHS \
-            custom_hooks.1.stop_epoch=$STOP_EPOCH \
-            custom_hooks.2.mask_path=\"/workspace/work_dirs/fedselect_masks/${MODEL_NAME}_mask.pth\"
+            custom_hooks.1.stop_epoch=$STOP_EPOCH
       '
     "
 }
@@ -178,7 +176,7 @@ run_merge () {
             --outputs $OUT_A $OUT_B $OUT_C $OUT_D $OUT_E \
             --weight-a $SIZE_A --weight-b $SIZE_B --weight-c $SIZE_C --weight-d $SIZE_D --weight-e $SIZE_E \
             --method $METHOD \
-            --config projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn_paramselect.py \
+            --config projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn.py \
             --select-ratio 0.0005 \
             --max-sparsity 0.01"
             

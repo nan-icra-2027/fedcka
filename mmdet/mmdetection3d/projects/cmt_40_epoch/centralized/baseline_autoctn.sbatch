@@ -25,7 +25,14 @@ export SAMPLES_PER_GPU=16
 export WANDB_PROJECT="cmt_40_epoch"
 export WANDB_NAME="centralized_model"
 export WANDB_API_KEY=$(awk '$1=="machine" && $2=="api.wandb.ai" {found=1}found && $1=="password" {print $2; exit}' "$HOME/.netrc")
-export WANDB_RUN_ID="84th1vju"
+
+export CONTINUE_WANDB_RUN=true
+# Create persistent WandB Run IDs based on CONTINUE_WANDB_RUN flag
+if [ "$CONTINUE_WANDB_RUN" == "true" ]; then
+    export WANDB_RUN_ID="${WANDB_NAME}"
+else
+    export WANDB_RUN_ID="job_${SLURM_JOB_ID}"
+fi
 
 /usr/bin/scontrol show job -d "$SLURM_JOB_ID" # check sbatch working
 
@@ -45,7 +52,7 @@ else
 fi
 
 # --- LOCAL DATA SETUP ---
-NETWORK_DATA_ROOT="/YOUR_WORKDIR_PATH_HERE/datasets/nuscenes_cmt_full"
+NETWORK_DATA_ROOT="/YOUR_WORKDIR_PATH_HERE/datasets/nuscenes_cmt_full" # this needs to be the entire original nuscenes dataset
 TMP_BASE="/YOUR_TMPDIR_PATH_HERE/_${SLURM_JOB_ID}"
 
 echo "Creating tmp directories on all nodes..."
@@ -107,6 +114,7 @@ srun --ntasks=2 --gpus-per-task=1 bash -lc "
       projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn.py \
       --launcher slurm \
       --work-dir /workspace/work_dirs \
+      --seed 0 \
       \$TRAIN_ARGS \
       --cfg-options \
         evaluation.interval=1 \

@@ -35,14 +35,14 @@ Comparison of Federated Learning methods across nuScenes domains. Performance is
 | Method | Domain A | Domain B | Domain C | Domain D | Domain E | Avg. |
 | --- | --- | --- | --- | --- | --- | --- |
 | *Centralized* | *0.66* | *0.68* | *0.67* | *0.64* | *0.58* | *0.66* |
-| *Own Domain Only* | *0.64* | *0.51* | *0.62* | *0.24* | *0.07* | *0.57* |
+| *Own Domain Only* | *0.64* | *0.51* | *0.62* | *0.24* | *0.08* | *0.57* |
 | FedAvg [1] | 0.37 | 0.36 | 0.38 | 0.35 | 0.33 | 0.37 |
 | FedDyn [2] | 0.48 | 0.46 | 0.48 | 0.43 | 0.35 | 0.47 |
-| PCGrad [3, 4] | 0.41 | 0.41 | 0.44 | 0.39 | 0.34 | 0.42 |
-| FedRep [5] | 0.43 | 0.40 | 0.44 | 0.41 | 0.33 | 0.43 |
-| FedBN [6] | 0.41 | 0.41 | 0.43 | 0.36 | 0.33 | 0.41 |
-| FedMC [7] | 0.56 | 0.56 | 0.58 | 0.47 | 0.32 | 0.56 |
-| FedSelect [8] | 0.59 | 0.51 | 0.56 | 0.40 | 0.34 | 0.55 |
+| PCGrad [3] | 0.41 | 0.41 | 0.44 | 0.39 | 0.34 | 0.42 |
+| FedRep [4] | 0.43 | 0.40 | 0.44 | 0.41 | 0.33 | 0.43 |
+| FedBN [5] | 0.41 | 0.41 | 0.43 | 0.36 | 0.33 | 0.41 |
+| FedMC [6] | 0.56 | 0.56 | 0.58 | 0.47 | 0.32 | 0.56 |
+| FedSelect [7] | 0.59 | 0.51 | 0.56 | 0.40 | 0.34 | 0.55 |
 | **FedCKA (Ours)** | **0.65** | **0.63** | **0.64** | **0.59** | **0.50** | **0.63** |
 
 
@@ -55,8 +55,8 @@ Download the image components directly into the `/image` directory:
 
 ```bash
 cd /YOUR_PATH_HERE/mmdet/image
-wget -c [https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/mmdet3d_v1rc5.sif](https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/mmdet3d_v1rc5.sif)
-wget -c [https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/flash_attn-1.0.4-cp38-cp38-linux_x86_64.whl](https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/flash_attn-1.0.4-cp38-cp38-linux_x86_64.whl)
+wget -c [https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/unibev_cuda113_ubuntu2004_gcc10.sif](https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/unibev_cuda113_ubuntu2004_gcc10.sif)
+wget -c [https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/flash_attn-0.2.2+cu113torch1.11.0-cp38-cp38-linux_x86_64.whl](https://huggingface.co/datasets/Anon-fedcka-ICRA/essentials/resolve/main/flash_attn-0.2.2+cu113torch1.11.0-cp38-cp38-linux_x86_64.whl)
 
 ```
 
@@ -89,7 +89,7 @@ This repository is anonymized for peer review. Author identities and institution
 
 ## AI Usage Disclosure
 
-During the development of this codebase, the authors utilized ChatGPT, Google Gemini, and GitHub Copilot in Agent Mode as programming assistants. The system was used strictly as an assistive tool for debugging, expanding existing functions, and generating boilerplate code. All AI-generated code was thoroughly reviewed, tested, and modified by the authors to ensure correctness and compatibility within the MMDetection3D environment. The authors assume full responsibility for the functionality, logic, and integrity of the code in this repository.
+During the development of this codebase, the authors utilized ChatGPT, Google Gemini, and GitHub Copilot in Agent Mode as programming assistants. The system was used strictly as an assistive tool for debugging, expanding existing functions, generating boilerplate code, and replacing repetitive tasks. All AI-generated code was thoroughly reviewed, tested, and modified by the authors to ensure correctness and compatibility within the MMDetection3D environment. The authors assume full responsibility for the functionality, logic, and integrity of the code in this repository.
 
 ### References
 

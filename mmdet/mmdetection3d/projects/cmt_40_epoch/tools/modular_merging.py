@@ -44,7 +44,7 @@ def parse_args():
     # ------------------------------------
 
     # optimizer reset argument    
-    parser.add_argument('--no-reset-optimizer', action='store_true', default=False, help='If set, does not zero out optimizer states in merged checkpoints to reset momentum.')
+    parser.add_argument('--no-reset-optimizer', action='store_true', default=True, help='If set, does not zero out optimizer states in merged checkpoints to reset momentum.')
 
     # fedCKA overwirte for dynamic sparsity
     parser.add_argument('--dynamic-sparsity', type=float, default=0.0, help='FedCKA: Dynamic sparsity fraction for this round (default: 0.0 for no dynamic sparsity).')
@@ -76,23 +76,36 @@ def unflatten_tensors(flat_tensor, reference_dict, valid_keys):
     return unflattened
 
 
-def PCGRAD(models, output_paths, norm_weights, client_ids, prev_global_path="/workspace/work_dirs/pcgrad_states/global_model.pth"):
+def reset_optimizer_state(ckpt, no_reset_optimizer=False):
+    """Reset checkpoint optimizer tensors unless explicitly disabled."""
+    if no_reset_optimizer:
+        return
+
+    if 'optimizer' in ckpt and 'state' in ckpt['optimizer']:
+        for param_id in ckpt['optimizer']['state']:
+            for key in ckpt['optimizer']['state'][param_id]:
+                value = ckpt['optimizer']['state'][param_id][key]
+                if torch.is_tensor(value):
+                    value.zero_()
+
+
+def PCGRAD(models, output_paths, norm_weights, client_ids, prev_global_path="/workspace/work_dirs/pcgrad_states/global_model.pth", no_reset_optimizer=False):
     """
-    PCGRAD - With Configurable Exclusions. NOT WOKRING CORRECLT. NOW IS PCGRADIENT PROJECTION WITHOUT THE MOMENTUM OPTIMIZATION.
+    PCGRAD - With Configurable Exclusions. Naming is off, as FedOMG is more elaborate version of this, and this is simpler PCGrad.
     """
     # =====================================================================
     # [CONFIGURATION] EXCLUSION SETTINGS
     # =====================================================================
     # By default, we exclude BatchNorm running stats from gradient matching.
-    # You can add any layer prefix or string here to exclude it from FedOMG.
+    # You can add any layer prefix or string here to exclude it.
     # Any parameter whose name contains any of these strings will bypass the 
     # projection math and simply be aggregated via standard FedAvg.
-    #
-    # Example to exclude the detection head and LayerNorms:
-    # EXCLUDE_PREFIXES = ['running_mean', 'running_var', 'num_batches_tracked', 'bbox_head', 'LayerNorm']
+
+    # Using this projection logic on the BatchNorm running stats can lead to instability, so it is possible to exclude them with:
+    # EXCLUDE_PREFIXES = ['bn','running_mean', 'running_var', 'num_batches_tracked']
     # =====================================================================
     
-    EXCLUDE_PREFIXES = ['bn','running_mean', 'running_var', 'num_batches_tracked', 'pts_bbox_head.task_heads']
+    EXCLUDE_PREFIXES = ['num_batches_tracked']
     KEEP_PRIVATE = True     # keeps the excluded prefixes strictly local and does not merge them into the client models
 
     print("\n" + "="*50)
@@ -238,11 +251,7 @@ def PCGRAD(models, output_paths, norm_weights, client_ids, prev_global_path="/wo
                 if k in ckpt['state_dict']:
                     ckpt['state_dict'][k] = global_ckpt['state_dict'][k].clone()
                 
-        if 'optimizer' in ckpt and 'state' in ckpt['optimizer']:
-            for param_id in ckpt['optimizer']['state']:
-                for key in ckpt['optimizer']['state'][param_id]:
-                    if torch.is_tensor(ckpt['optimizer']['state'][param_id][key]):
-                        ckpt['optimizer']['state'][param_id][key].zero_()
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                         
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
@@ -302,18 +311,13 @@ def fedavg(models, output_paths, norm_weights, no_reset_optimizer=False):
         for k in averaged_weights.keys():
             ckpt['state_dict'][k] = averaged_weights[k]
         
-        if not no_reset_optimizer:
-            if 'optimizer' in ckpt and 'state' in ckpt['optimizer']:
-                for param_id in ckpt['optimizer']['state']:
-                    for key in ckpt['optimizer']['state'][param_id]:
-                        if torch.is_tensor(ckpt['optimizer']['state'][param_id][key]):
-                            ckpt['optimizer']['state'][param_id][key].zero_()
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                         
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
         print(f"Saved merged model with optimizer state to {out_path}")
 
-def fedbn(models, output_paths, norm_weights, model_instance):
+def fedbn(models, output_paths, norm_weights, model_instance, no_reset_optimizer=False):
     """
     FedBN implementation. Uses the provided PyTorch model instance to map out
     BatchNorm layers and excludes their weights, biases, and running stats from averaging.
@@ -381,17 +385,13 @@ def fedbn(models, output_paths, norm_weights, model_instance):
         for k in averaged_weights.keys():
             ckpt['state_dict'][k] = averaged_weights[k]
             
-        if 'optimizer' in ckpt and 'state' in ckpt['optimizer']:
-            for param_id in ckpt['optimizer']['state']:
-                for key in ckpt['optimizer']['state'][param_id]:
-                    if torch.is_tensor(ckpt['optimizer']['state'][param_id][key]):
-                        ckpt['optimizer']['state'][param_id][key].zero_()
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                         
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
         print(f"Saved merged model with optimizer state to {out_path}")
 
-def fedrep(models, output_paths, norm_weights):
+def fedrep(models, output_paths, norm_weights, no_reset_optimizer=False):
     """
     fedrep implementation. Averages the backbone and neck, but keeps the 
     task head subsets completely local and personalized.
@@ -458,17 +458,13 @@ def fedrep(models, output_paths, norm_weights):
         for k in averaged_weights.keys():
             ckpt['state_dict'][k] = averaged_weights[k]
             
-        if 'optimizer' in ckpt and 'state' in ckpt['optimizer']:
-            for param_id in ckpt['optimizer']['state']:
-                for key in ckpt['optimizer']['state'][param_id]:
-                    if torch.is_tensor(ckpt['optimizer']['state'][param_id][key]):
-                        ckpt['optimizer']['state'][param_id][key].zero_()
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                         
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
         print(f"Saved merged model to {out_path}")
 
-def feddyn(models, output_paths, norm_weights, alpha=0.01, work_dir="work_dirs/feddyn_states"):
+def feddyn(models, output_paths, norm_weights, alpha=0.01, work_dir="work_dirs/feddyn_states", no_reset_optimizer=False):
     print("Running FedDyn Aggregation...")
     
     # 1. Standard FedAvg of the incoming client weights
@@ -524,16 +520,12 @@ def feddyn(models, output_paths, norm_weights, alpha=0.01, work_dir="work_dirs/f
             ckpt['state_dict'][k] = averaged_weights[k]
         
         # Zero out optimizer momentum
-        if 'optimizer' in ckpt and 'state' in ckpt['optimizer']:
-            for param_id in ckpt['optimizer']['state']:
-                for key in ckpt['optimizer']['state'][param_id]:
-                    if torch.is_tensor(ckpt['optimizer']['state'][param_id][key]):
-                        ckpt['optimizer']['state'][param_id][key].zero_()
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                         
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
 
-def fedselect(models, output_paths, norm_weights, client_ids, prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", mask_dir="/workspace/work_dirs/fedselect_masks", select_ratio=0.05, max_sparsity=0.5):
+def fedselect(models, output_paths, norm_weights, client_ids, prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", mask_dir="/workspace/work_dirs/fedselect_masks", select_ratio=0.05, max_sparsity=0.5, no_reset_optimizer=False):
     """
     FedSelect implementation (CVPR 2024). 
     Automatically discovers and freezes personalized subnetworks for each client 
@@ -998,14 +990,14 @@ def fedselect(models, output_paths, norm_weights, client_ids, prev_global_path="
                 m = client_mask[k].float()
                 state[k] = (m * state[k]) + ((1.0 - m) * averaged_weights[k])
                 
-        # --- OPTIMIZER PURGING REMOVED FROM HERE ---
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                         
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
         print(f"Saved personalized FedSelect model to {out_path}")
 
 
-def fedselect_elastic(models, output_paths, norm_weights, client_ids, prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", mask_dir="/workspace/work_dirs/fedselect_masks", select_ratio=0.05, max_sparsity=0.5):
+def fedselect_elastic(models, output_paths, norm_weights, client_ids, prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", mask_dir="/workspace/work_dirs/fedselect_masks", select_ratio=0.05, max_sparsity=0.5, no_reset_optimizer=False):
     """
     FedSelect implementation with Relative Scaling & Mask Reintroduction.
     """
@@ -1205,13 +1197,15 @@ def fedselect_elastic(models, output_paths, norm_weights, client_ids, prev_globa
             if k in state:
                 m = client_mask[k].float()
                 state[k] = (m * state[k]) + ((1.0 - m) * averaged_weights[k])
+
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                 
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
         print(f"Saved personalized FedSelect model to {out_path}")
 
 
-def fedselect_fullelastic(models, output_paths, norm_weights, client_ids, prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", mask_dir="/workspace/work_dirs/fedselect_masks", select_ratio=0.05):
+def fedselect_fullelastic(models, output_paths, norm_weights, client_ids, prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", mask_dir="/workspace/work_dirs/fedselect_masks", select_ratio=0.05, no_reset_optimizer=False):
     """
     FedSelect Full Elastic implementation.
     Evaluates all parameters from scratch every round to find the top `select_ratio` 
@@ -1373,13 +1367,15 @@ def fedselect_fullelastic(models, output_paths, norm_weights, client_ids, prev_g
                 m = client_mask[k].float()
                 # Personal weights remain (m * state), Global weights injected ((1-m) * averaged)
                 state[k] = (m * state[k]) + ((1.0 - m) * averaged_weights[k])
+
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                 
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
         print(f"Saved personalized FedSelect model to {out_path}")
 
 
-def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_path, mask_dir, select_ratio, max_sparsity, runner_path, config, data_dirs, modality, cka_samples, dynamic_sparsity):
+def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_path, mask_dir, select_ratio, max_sparsity, runner_path, config, data_dirs, modality, cka_samples, dynamic_sparsity, no_reset_optimizer=False):
     """
     FedSelect CKA implementation.
     Computes CKA between the previous global model and each client model.
@@ -1654,6 +1650,8 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
             if k in state:
                 m = client_mask[k].float()
                 state[k] = (m * state[k]) + ((1.0 - m) * averaged_weights[k])
+
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                 
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
@@ -1714,7 +1712,7 @@ def fedselect_cka(models, output_paths, norm_weights, client_ids, prev_global_pa
     else:
         print(f"Current round is {actual_current_round}. Threshold is {threshold_round}. No cleanup needed yet.")
     
-def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_global_path, mask_dir, select_ratio, max_sparsity, runner_path, config, data_dirs, modality, cka_samples, dynamic_sparsity):
+def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_global_path, mask_dir, select_ratio, max_sparsity, runner_path, config, data_dirs, modality, cka_samples, dynamic_sparsity, no_reset_optimizer=False):
     """
     FedSelect CKA implementation.
     Computes CKA between the previous global model and each client model.
@@ -2241,6 +2239,8 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
             if k in state:
                 m = client_mask[k].float()
                 state[k] = (m * state[k]) + ((1.0 - m) * averaged_weights[k])
+
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                 
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
@@ -2299,7 +2299,7 @@ def fedselect_cka_elastic(models, output_paths, norm_weights, client_ids, prev_g
 def fedmc(models, fisher_paths, output_paths, norm_weights, client_ids, 
           prev_global_path="/workspace/work_dirs/fedmc_states/global_model.pth", 
           mask_dir="/workspace/work_dirs/fedmc_masks", 
-          select_ratio=0.05, max_sparsity=0.5):
+          select_ratio=0.05, max_sparsity=0.5, no_reset_optimizer=False):
     """
     FedMC implementation (Information Content Model Customization). 
     Automatically discovers and freezes personalized subnetworks for each client 
@@ -2841,6 +2841,8 @@ def fedmc(models, fisher_paths, output_paths, norm_weights, client_ids,
                 # Final weight = Mask * Local + (1 - Mask) * Global
                 m = client_mask[k].float()
                 state[k] = (m * state[k]) + ((1.0 - m) * averaged_weights[k])
+
+        reset_optimizer_state(ckpt, no_reset_optimizer)
                         
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         torch.save(ckpt, out_path)
@@ -2880,7 +2882,7 @@ def main():
     # Route to the appropriate modular function
     if args.method == 'fedavg':
         print(f'Optimizer state will be reset: {not args.no_reset_optimizer}')
-        fedavg(model_paths, output_paths, norm_weights, args.no_reset_optimizer)
+        fedavg(model_paths, output_paths, norm_weights, no_reset_optimizer=args.no_reset_optimizer)
         
     elif args.method == 'fedbn':
         if args.config is None:
@@ -2927,12 +2929,12 @@ def main():
             train_cfg=cfg.get('train_cfg'),
             test_cfg=cfg.get('test_cfg'))
 
-        fedbn(model_paths, output_paths, norm_weights, model_instance)
+        fedbn(model_paths, output_paths, norm_weights, model_instance, no_reset_optimizer=args.no_reset_optimizer)
     elif args.method == 'fedrep':
-        fedrep(model_paths, output_paths, norm_weights)
+        fedrep(model_paths, output_paths, norm_weights, no_reset_optimizer=args.no_reset_optimizer)
         
     elif args.method == 'feddyn':
-        feddyn(model_paths, output_paths, norm_weights, alpha=0.01, work_dir="work_dirs/feddyn_states")
+        feddyn(model_paths, output_paths, norm_weights, alpha=0.01, work_dir="work_dirs/feddyn_states", no_reset_optimizer=args.no_reset_optimizer)
 
     elif args.method == 'fedselect':
         client_ids = [f"Model{string.ascii_uppercase[i]}" for i in range(len(model_paths))]
@@ -2944,7 +2946,8 @@ def main():
             prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", 
             mask_dir="/workspace/work_dirs/fedselect_masks",
             select_ratio=args.select_ratio,
-            max_sparsity=args.max_sparsity
+            max_sparsity=args.max_sparsity,
+            no_reset_optimizer=args.no_reset_optimizer
         )
     elif args.method == 'fedselect_elastic':
         client_ids = [f"Model{string.ascii_uppercase[i]}" for i in range(len(model_paths))]
@@ -2956,7 +2959,8 @@ def main():
             prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", 
             mask_dir="/workspace/work_dirs/fedselect_masks",
             select_ratio=args.select_ratio,
-            max_sparsity=args.max_sparsity
+            max_sparsity=args.max_sparsity,
+            no_reset_optimizer=args.no_reset_optimizer
         )
     elif args.method == 'fedselect_fullelastic':
         client_ids = [f"Model{string.ascii_uppercase[i]}" for i in range(len(model_paths))]
@@ -2967,7 +2971,8 @@ def main():
             client_ids=client_ids,
             prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", 
             mask_dir="/workspace/work_dirs/fedselect_masks",
-            select_ratio=args.select_ratio
+            select_ratio=args.select_ratio,
+            no_reset_optimizer=args.no_reset_optimizer
         )
     elif args.method == 'fedselect_cka':
         client_ids = [f"Model{string.ascii_uppercase[i]}" for i in range(len(model_paths))]
@@ -2989,7 +2994,8 @@ def main():
             data_dirs=cka_data_dirs[:len(model_paths)],
             modality=args.modality,
             cka_samples=args.cka_samples,
-            dynamic_sparsity=args.dynamic_sparsity
+            dynamic_sparsity=args.dynamic_sparsity,
+            no_reset_optimizer=args.no_reset_optimizer
         )
     elif args.method == 'pcgrad':
             client_ids = [f"Model{string.ascii_uppercase[i]}" for i in range(len(model_paths))]
@@ -2998,7 +3004,8 @@ def main():
                 output_paths=output_paths, 
                 norm_weights=norm_weights, 
                 client_ids=client_ids,
-                prev_global_path="/workspace/work_dirs/pcgrad_states/global_model.pth"
+                prev_global_path="/workspace/work_dirs/pcgrad_states/global_model.pth",
+                no_reset_optimizer=args.no_reset_optimizer
             ) 
     elif args.method == 'fedmc':
         client_ids = [f"Model{string.ascii_uppercase[i]}" for i in range(len(model_paths))]
@@ -3011,7 +3018,8 @@ def main():
             prev_global_path="/workspace/work_dirs/fedmc_states/global_model.pth", 
             mask_dir="/workspace/work_dirs/fedmc_masks",
             select_ratio=args.select_ratio,
-            max_sparsity=args.max_sparsity
+            max_sparsity=args.max_sparsity,
+            no_reset_optimizer=args.no_reset_optimizer
         )
     elif args.method == 'fedselect_cka_elastic':
         client_ids = [f"Model{string.ascii_uppercase[i]}" for i in range(len(model_paths))]
@@ -3033,7 +3041,8 @@ def main():
             data_dirs=cka_data_dirs[:len(model_paths)],
             modality=args.modality,
             cka_samples=args.cka_samples,
-            dynamic_sparsity=args.dynamic_sparsity
+            dynamic_sparsity=args.dynamic_sparsity,
+            no_reset_optimizer=args.no_reset_optimizer
         )
 if __name__ == '__main__':
     main()

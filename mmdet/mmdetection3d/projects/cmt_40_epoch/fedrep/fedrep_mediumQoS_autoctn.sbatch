@@ -146,6 +146,7 @@ run_training () {
         projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn.py \
           --launcher slurm \
           --work-dir $WORK_DIR \
+          --seed 0 \
           $RESUME_ARG \
           --cfg-options ${CFG_LOAD_ARG} dist_params.port=$CURRENT_MASTER_PORT \
             data.samples_per_gpu=$SAMPLES_PER_GPU \
@@ -177,11 +178,11 @@ run_merge () {
       bash -lc "
         cd /workspace/mmdet/mmdetection3d && \
         export PYTHONPATH=/workspace/mmdet/mmdetection3d:/workspace/mmdet:\$PYTHONPATH && \
-        python projects/cmt/fed/tools/modular_merging.py \
+        python projects/cmt_40_epoch/tools/modular_merging.py \
             --inputs $CKPT_A $CKPT_B $CKPT_C $CKPT_D $CKPT_E \
             --outputs $OUT_A $OUT_B $OUT_C $OUT_D $OUT_E \
             --weight-a $SIZE_A --weight-b $SIZE_B --weight-c $SIZE_C --weight-d $SIZE_D --weight-e $SIZE_E \
-            --method fedper \
+            --method fedrep \
             --config projects/configs/cmt_voxel01_vov_1600x640_cbgs_syncbn.py
       "
 }

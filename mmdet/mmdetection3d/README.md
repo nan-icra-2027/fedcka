@@ -13,7 +13,7 @@ Clone the matching base version of MMDetection3D to populate any missing upstrea
 git clone --depth 1 --branch v1.0.0rc5 [https://github.com/open-mmlab/mmdetection3d.git](https://github.com/open-mmlab/mmdetection3d.git) /tmp/mmdet3d_temp
 
 # Copy missing files while strictly preserving all custom files and folders
-cd /YOUR_PATH_HERE/fedcka/
+cd /YOUR_PATH_HERE/fedcka/mmdet
 rsync -av --ignore-existing /tmp/mmdet3d_temp/ ./
 
 # Clean up temporary directory
@@ -28,7 +28,7 @@ rm -rf /tmp/mmdet3d_temp
 Create the checkpoint directory:
 
 ```bash
-mkdir -p /YOUR_PATH_HERE/fedcka/mmdetection3d/ckpts
+mkdir -p /YOUR_PATH_HERE/fedcka/mmdet/mmdetection3d/ckpts
 
 ```
 

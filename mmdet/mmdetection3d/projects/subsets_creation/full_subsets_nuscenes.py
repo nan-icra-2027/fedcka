@@ -41,13 +41,13 @@ from concurrent.futures import ProcessPoolExecutor
 # ================= GLOBAL CONFIGURATION =================
 # Paths (same for all configurations)
 NUSC_SOURCE_ROOT = Path("/YOUR_PATH_HERE/nuscenes")
-EXCEL_PATH = Path("/YOUR_PATH_HEREmmdet/mmdetection3d/projects/subsets_creation/scene_domains_summary.xlsx")
+EXCEL_PATH = Path("/YOUR_PATH_HERE/mmdet/mmdetection3d/projects/subsets_creation/scene_domains_summary.xlsx")
 BASE_OUT_ROOT = Path("/YOUR_PATH_HERE/datasets/cmt_subsets")
 
 # Global options
 COPY_METHOD = "symlink"  # not used, but symlinks now by default
 OVERWRITE = True  # Overwrite existing files in output
-DEFAULT_RANDOM_SEED = 1234 # used 2026 for the first round, now using 1234 for cmt subdir
+DEFAULT_RANDOM_SEED = 2026 # does not matter for main paper method, as no scenes are randomly dropped.
 
 # Domain mapping
 DOMAIN_MAPPING = {
