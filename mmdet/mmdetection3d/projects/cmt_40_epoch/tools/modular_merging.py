@@ -466,64 +466,188 @@ def fedrep(models, output_paths, norm_weights, no_reset_optimizer=False):
 
 def feddyn(models, output_paths, norm_weights, alpha=0.01, work_dir="work_dirs/feddyn_states", no_reset_optimizer=False):
     print("Running FedDyn Aggregation...")
-    
-    # 1. Standard FedAvg of the incoming client weights
-    temp_ckpt = torch.load(models[0], map_location='cpu')
-    running_sum = {k: torch.zeros_like(v) for k, v in temp_ckpt['state_dict'].items() if v.is_floating_point() and 'num_batches_tracked' not in k}
-    del temp_ckpt
-    
-    for i, m_path in enumerate(models):
-        ckpt_i = torch.load(m_path, map_location='cpu')
-        for k in running_sum.keys():
-            if k in ckpt_i['state_dict']:
-                running_sum[k] += ckpt_i['state_dict'][k] * norm_weights[i]
-        del ckpt_i
-        
-    averaged_weights = {k: running_sum[k] for k in running_sum.keys()}
 
-    # 2. Update Global Server State (h_global)
-    h_global_path = os.path.join(work_dir, "server_h_state.pth")
-    if os.path.exists(h_global_path):
-        h_global = torch.load(h_global_path)
-    else:
-        h_global = {k: torch.zeros_like(v) for k, v in averaged_weights.items()}
+    if len(models) != len(output_paths):
+        raise ValueError("The number of input and output model paths must match.")
 
-    # Sum up all client h_states
     client_ids = ["ModelA", "ModelB", "ModelC", "ModelD", "ModelE"]
-    skipped = 0
-    updated = 0
-    for i, cid in enumerate(client_ids):
-        client_h_path = os.path.join(work_dir, f"{cid}_h_state.pth")
-        if os.path.exists(client_h_path):
-            client_h = torch.load(client_h_path)
-            for k in h_global.keys():
-                # Safety check: Only update if the client actually tracked this parameter's state
-                if k in client_h:
-                    h_global[k] -= (alpha * norm_weights[i]) * (averaged_weights[k] - client_h[k])
-                    updated += 1
-                else:
-                    #print(f"Warning: {client_h_path} does not contain state for {k}. Skipping update for this key.")
-                    skipped += 1
+    if len(models) != len(client_ids):
+        raise ValueError(
+            f"FedDyn expects {len(client_ids)} clients, but received {len(models)}."
+        )
 
-    print(f"FedDyn: Updated global state with client contributions. Skipped {skipped} keys due to missing client states.")
-    print(f"FedDyn: Successfully updated {updated} keys in global state.")
-    torch.save(h_global, h_global_path)
+    if len(norm_weights) != len(models):
+        raise ValueError(
+            "The number of aggregation weights must match the number of models."
+        )
 
-    # 3. Apply Global State to Averaged Weights
-    for k in averaged_weights.keys():
-        averaged_weights[k] += (1.0 / alpha) * h_global[k]
+    if alpha <= 0:
+        raise ValueError("FedDyn alpha must be greater than zero.")
 
-    # 4. Inject and Save
-    for in_path, out_path in zip(models, output_paths):
-        ckpt = torch.load(in_path, map_location='cpu')
-        for k in averaged_weights.keys():
-            ckpt['state_dict'][k] = averaged_weights[k]
-        
-        # Zero out optimizer momentum
-        reset_optimizer_state(ckpt, no_reset_optimizer)
-                        
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        torch.save(ckpt, out_path)
+    # Ensure that the aggregation weights form a normalized weighted mean.
+    weight_sum = float(sum(norm_weights))
+    if weight_sum <= 0:
+        raise ValueError("FedDyn aggregation weights must have a positive sum.")
+
+    normalized_weights = [
+        float(weight) / weight_sum for weight in norm_weights
+    ]
+
+    # ------------------------------------------------------------------
+    # 1. Compute the weighted average of the incoming client models.
+    # ------------------------------------------------------------------
+    temp_ckpt = torch.load(models[0], map_location="cpu")
+
+    running_sum = {
+        key: torch.zeros_like(value)
+        for key, value in temp_ckpt["state_dict"].items()
+        if value.is_floating_point() and "num_batches_tracked" not in key
+    }
+
+    del temp_ckpt
+
+    for model_path, client_weight in zip(models, normalized_weights):
+        client_ckpt = torch.load(model_path, map_location="cpu")
+        client_state = client_ckpt["state_dict"]
+
+        for key in running_sum:
+            if key not in client_state:
+                raise KeyError(
+                    f"Parameter '{key}' is missing from checkpoint: {model_path}"
+                )
+
+            running_sum[key] += client_state[key] * client_weight
+
+        del client_ckpt
+
+    averaged_weights = {
+        key: value
+        for key, value in running_sum.items()
+    }
+
+    # ------------------------------------------------------------------
+    # 2. Load the cumulative client h states.
+    #
+    # The client hook uses:
+    #
+    #     h_i <- h_i - alpha * (w_i - global)
+    #
+    # Therefore, with this sign convention, the FedDyn global model is:
+    #
+    #     global <- weighted_mean(w_i) - weighted_mean(h_i) / alpha
+    #
+    # No additional persistent server_h_state is required because the
+    # individual client h states are already cumulative.
+    # ------------------------------------------------------------------
+    client_h_states = []
+
+    for client_id in client_ids:
+        client_h_path = os.path.join(
+            work_dir,
+            f"{client_id}_h_state.pth"
+        )
+
+        if not os.path.exists(client_h_path):
+            raise FileNotFoundError(
+                f"Missing FedDyn state for {client_id}: {client_h_path}"
+            )
+
+        client_h = torch.load(client_h_path, map_location="cpu")
+        client_h_states.append(client_h)
+
+    def get_client_h_value(client_h, parameter_key):
+        """Handle checkpoints with or without a leading 'module.' prefix."""
+        if parameter_key in client_h:
+            return client_h[parameter_key]
+
+        clean_key = parameter_key.removeprefix("module.")
+        if clean_key in client_h:
+            return client_h[clean_key]
+
+        prefixed_key = f"module.{clean_key}"
+        if prefixed_key in client_h:
+            return client_h[prefixed_key]
+
+        return None
+
+    # ------------------------------------------------------------------
+    # 3. Apply the FedDyn correction to the averaged model.
+    # ------------------------------------------------------------------
+    corrected_keys = 0
+    untracked_keys = 0
+
+    for key, averaged_value in averaged_weights.items():
+        client_h_values = [
+            get_client_h_value(client_h, key)
+            for client_h in client_h_states
+        ]
+
+        available_count = sum(
+            value is not None for value in client_h_values
+        )
+
+        if available_count == len(client_h_states):
+            mean_h = torch.zeros_like(averaged_value)
+
+            for client_weight, client_h_value in zip(
+                normalized_weights,
+                client_h_values
+            ):
+                if client_h_value.shape != averaged_value.shape:
+                    raise ValueError(
+                        f"Shape mismatch for FedDyn state '{key}': "
+                        f"model shape={tuple(averaged_value.shape)}, "
+                        f"h-state shape={tuple(client_h_value.shape)}"
+                    )
+
+                mean_h += client_h_value.to(
+                    dtype=averaged_value.dtype
+                ) * client_weight
+
+            averaged_weights[key] = averaged_value - (mean_h / alpha)
+            corrected_keys += 1
+
+        elif available_count == 0:
+            # State-dict buffers that are not trainable parameters are not
+            # necessarily tracked by the client hook. Keep their FedAvg value.
+            untracked_keys += 1
+
+        else:
+            raise KeyError(
+                f"FedDyn state '{key}' is present for only "
+                f"{available_count}/{len(client_h_states)} clients. "
+                "Refusing to aggregate inconsistent client states."
+            )
+
+    print(
+        f"FedDyn: Applied dynamic correction to {corrected_keys} keys."
+    )
+    print(
+        f"FedDyn: Kept the FedAvg value for {untracked_keys} "
+        "untracked state-dict keys."
+    )
+
+    # ------------------------------------------------------------------
+    # 4. Inject the corrected global weights and save each client model.
+    # ------------------------------------------------------------------
+    for input_path, output_path in zip(models, output_paths):
+        checkpoint = torch.load(input_path, map_location="cpu")
+
+        for key, value in averaged_weights.items():
+            checkpoint["state_dict"][key] = value
+
+        reset_optimizer_state(
+            checkpoint,
+            no_reset_optimizer
+        )
+
+        os.makedirs(
+            os.path.dirname(output_path),
+            exist_ok=True
+        )
+        torch.save(checkpoint, output_path)
+
+        print(f"Saved FedDyn model to: {output_path}")
 
 def fedselect(models, output_paths, norm_weights, client_ids, prev_global_path="/workspace/work_dirs/fedselect_states/global_model.pth", mask_dir="/workspace/work_dirs/fedselect_masks", select_ratio=0.05, max_sparsity=0.5, no_reset_optimizer=False):
     """

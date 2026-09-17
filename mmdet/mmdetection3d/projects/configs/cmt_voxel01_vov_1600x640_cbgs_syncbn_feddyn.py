@@ -399,7 +399,7 @@ custom_hooks = [
     dict(
         type='FedDynHook',              
         client_id='Placeholder',        # Will be overwritten by sbatch
-        start_epoch=0,
+        start_epoch=10,
         alpha=0.01, 
         work_dir='workdirs/feddyn_states'
     )
