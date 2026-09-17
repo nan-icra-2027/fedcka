@@ -54,9 +54,10 @@ find . -type f -exec grep -lF "YOUR_WORKDIR_PATH_HERE" {} + | xargs -r sed -i 's
 
 ## Aggregation & Warm-Up Notes
 
-* **FedDyn, FedMC, FedSelect:**
+* **FedDyn, FedMC, FedSelect, FedCKA rho setting:**
 * Use a 10-round FedAvg warm-up phase to establish a stable initialization (all weights except the image backbone begin randomly initialized). This step significantly stabilizes optimization and boosts final metrics.
 
+* **FedCKA tau setting:**
+* Do **not** use the FedAvg warm-up phase; for layers are allowed to flow back if they align representationally. Using the 10 round warm-up deteriorates performance here, while for above descriped methods performance increases. It does use the first round FedAvg logic to initialize the same model for all clients.
 
-* **FedCKA:**
-* Do **not** use the FedAvg warm-up phase; pre-aggregating weights degrades representation alignment and harms downstream performance.
+
